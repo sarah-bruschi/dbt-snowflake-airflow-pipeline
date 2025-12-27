@@ -1,45 +1,55 @@
 Overview
 ========
 
-Welcome to Astronomer! This project was generated after you ran 'astro dev init' using the Astronomer CLI. This readme describes the contents of the project, as well as how to run Apache Airflow on your local machine.
+This repo uses an Astronomer (Astro) Airflow project with the Cosmos library to orchestrate a full data pipeline powered by dbt and Snowflake.
+
+What this project does
+----------------------
+- Parses and schedules dbt runs from Airflow using an Astronomer runtime image.
+- Provides a sample DAG (`dags/dbt_dag.py`) which demonstrates how to run dbt via the `DbtDag` helper and map an Airflow Connection (`snowflake_conn`) to a dbt profile at runtime.
 
 Project Contents
-================
+----------------
+- `dags/`: Airflow DAGs. The dbt-running DAG is `dags/dbt_dag.py`.
+- `Dockerfile`: Base Astro runtime image (where we create the dbt virtualenv).
+- `packages.txt`: OS packages installed in the image.
+- `requirements.txt`: Python packages (project-specific).
+- `airflow_settings.yaml`: Optional local-only file for Connections, Variables, Pools (can seed `snowflake_conn`).
 
-Your Astro project contains the following files and folders:
+dbt project layout
+------------------
+The dbt project used by the DAG uses sample snowflake data to transform and create models. 
 
-- dags: This folder contains the Python files for your Airflow DAGs. By default, this directory includes one example DAG:
-    - `example_astronauts`: This DAG shows a simple ETL pipeline example that queries the list of astronauts currently in space from the Open Notify API and prints a statement for each astronaut. The DAG uses the TaskFlow API to define tasks in Python, and dynamic task mapping to dynamically print a statement for each astronaut. For more on how this DAG works, see our [Getting started tutorial](https://www.astronomer.io/docs/learn/get-started-with-airflow).
-- Dockerfile: This file contains a versioned Astro Runtime Docker image that provides a differentiated Airflow experience. If you want to execute other commands or overrides at runtime, specify them here.
-- include: This folder contains any additional files that you want to include as part of your project. It is empty by default.
-- packages.txt: Install OS-level packages needed for your project by adding them to this file. It is empty by default.
-- requirements.txt: Install Python packages needed for your project by adding them to this file. It is empty by default.
-- plugins: Add custom or community plugins for your project to this file. It is empty by default.
-- airflow_settings.yaml: Use this local-only file to specify Airflow Connections, Variables, and Pools instead of entering them in the Airflow UI as you develop DAGs in this project.
+Requirements and setup
+----------------------
+1. Install Astro CLI and start the local runtime:
 
-Deploy Your Project Locally
-===========================
+```bash
+astro dev start
+```
 
-Start Airflow on your local machine by running 'astro dev start'.
+2. Ensure the Airflow Connection used by the DAG exists (the DAG expects `snowflake_conn`). Use the Airflow UI or the CLI inside the webserver container. Valid connection id example: `snowflake_conn`.
 
-This command will spin up five Docker containers on your machine, each for a different Airflow component:
+3. The DAG expects the dbt executable to be available in the image. By default the Dockerfile creates a venv at `$AIRFLOW_HOME/dbt_venv`; the DAG references that path. If you change where dbt is installed, update `execution_config` in `dags/dbt_dag.py`.
 
-- Postgres: Airflow's Metadata Database
-- Scheduler: The Airflow component responsible for monitoring and triggering tasks
-- DAG Processor: The Airflow component responsible for parsing DAGs
-- API Server: The Airflow component responsible for serving the Airflow UI and API
-- Triggerer: The Airflow component responsible for triggering deferred tasks
+Running and testing
+-------------------
+- Start the Astro project: `astro dev start`.
+- Open the Airflow UI at http://localhost:8080/ and verify the DAG `dbt_dag` appears.
+- Trigger the DAG from the UI or run the dbt model tasks directly from the CLI inside the container.
 
-When all five containers are ready the command will open the browser to the Airflow UI at http://localhost:8080/. You should also be able to access your Postgres Database at 'localhost:5432/postgres' with username 'postgres' and password 'postgres'.
+Troubleshooting
+---------------
+- If the DAG doesn't show up, check scheduler import errors: `astro dev logs --scheduler`.
+- If the API-server health check times out, inspect `astro dev logs --api-server` and increase the timeout with `astro dev start --wait 300` if startup is slow.
+- If you get a 422 when creating the Airflow connection, ensure the Connection ID contains only allowed characters and `Extra` is valid JSON.
+- If dbt is not found at runtime, confirm the dbt path and update `ExecutionConfig` in `dags/dbt_dag.py` to point to the container path where dbt is installed.
 
-Note: If you already have either of the above ports allocated, you can either [stop your existing Docker containers or change the port](https://www.astronomer.io/docs/astro/cli/troubleshoot-locally#ports-are-not-available-for-my-local-airflow-webserver).
-
-Deploy Your Project to Astronomer
-=================================
-
-If you have an Astronomer account, pushing code to a Deployment on Astronomer is simple. For deploying instructions, refer to Astronomer documentation: https://www.astronomer.io/docs/astro/deploy-code/
+Further customization
+---------------------
+- Add Python packages to `requirements.txt` and OS packages to `packages.txt` as needed.
+- Use `airflow_settings.yaml` to pre-seed connections/variables during local startup.
 
 Contact
-=======
-
-The Astronomer CLI is maintained with love by the Astronomer team. To report a bug or suggest a change, reach out to our support.
+-------
+If you need help with Astronomer or the Astro CLI, refer to Astronomer's docs: https://www.astronomer.io/docs/astro/ or ask me to help update this README with more project-specific instructions.
